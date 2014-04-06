@@ -17,20 +17,33 @@ import cc.factorie.optimize.OptimizableObjectives
 import cc.factorie.la.{GrowableSparseBinaryTensor1}
 import cc.factorie.DenseTensor1
 
+class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends TransitionBasedParserWithEmbeddings{
+  val denseFeatureDomainSize = 1
+  val defaultEmbedding = new DenseTensor1(denseFeatureDomainSize)
+  def getEmbedding(str: String) : DenseTensor1 = {
+    if (embedding == null)
+      defaultEmbedding
+    else {
+      if(embedding.contains(str))
+        embedding(str)
+      else
+        defaultEmbedding
+    }
+  }
 
-class TransitionBasedParserWithEmbeddings(embedding: WordEmbedding) extends BaseTransitionBasedParser {
-  //def this(stream:InputStream) = { this(); deserialize(stream) }
-//  def this(embeddingFile: File, modelFile: File) = {
-//
-//    this(new FileInputStream(file))
-//  }
-//  def this(url:java.net.URL) = {
-//    this()
-//    val stream = url.openConnection.getInputStream
-//    if (stream.available <= 0) throw new Error("Could not open "+url)
-//    println("TransitionBasedParser loading from "+url)
-//    deserialize(stream)
-//  }
+  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
+    new DenseTensor1(labelDomain.size,getEmbedding(w1).dot(getEmbedding(w2)))
+  }
+}
+
+class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends TransitionBasedParserWithWordEmbeddings{
+  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
+    tensor.getScoresForPair(w1,w2)
+  }
+}
+
+class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedParser {
+
   def serialize(stream: java.io.OutputStream): Unit = {
     import cc.factorie.util.CubbieConversions._
     // Sparsify the evidence weights
@@ -57,50 +70,16 @@ class TransitionBasedParserWithEmbeddings(embedding: WordEmbedding) extends Base
     dstream.close()
   }
 
-  val denseFeatureDomainSize = 1
-  val defaultEmbedding = new DenseTensor1(denseFeatureDomainSize)
-  def getEmbedding(str: String) : DenseTensor1 = {
-    if (embedding == null)
-      defaultEmbedding
-    else {
-      if(embedding.contains(str))
-        embedding(str)
-      else
-        defaultEmbedding
-    }
-  }
-  def getFeatures2(v: ParseDecisionVariable): (GrowableSparseBinaryTensor1,DenseTensor1) =  {
+
+  def getFeatures(v: ParseDecisionVariable): (GrowableSparseBinaryTensor1,DenseTensor1) =  {
     val denseFeatures =  getDenseFeatures(v)
     (v.features.value.asInstanceOf[GrowableSparseBinaryTensor1],denseFeatures)
   }
-//  def getFeatures3(v: ParseDecisionVariable): (GrowableSparseBinaryTensor1,DenseTensor1,DenseTensor1) =  {
-//    val denseFeatures =  getDenseFeatures2(v)
-//    (v.features.value.asInstanceOf[GrowableSparseBinaryTensor1],denseFeatures._1,denseFeatures._2)
-//  }
+
   def getDenseFeatures(v: ParseDecisionVariable): DenseTensor1 = {
-    //todo: make this class-conditional. I.e. get a different dot prod for every class
-    new DenseTensor1(labelDomain.size,getEmbedding(v.state.stackToken(0).form).dot(getEmbedding(v.state.lambdaToken(0).form)))
+    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.lambdaToken(0).form)
   }
-  //def getDenseFeatures2(v: ParseDecisionVariable): (DenseTensor1,DenseTensor1) = (getEmbedding(v.state.inputToken(0).form),getEmbedding(v.state.stackToken(0).form))
-
-
-//  lazy val model = new SparseAndDenseBilinearMulticlassClassifier[GrowableSparseBinaryTensor1,DenseTensor1,DenseTensor1](labelDomain.size, featuresDomain.dimensionSize,denseFeatureDomainSize)
-//  def classify(v: ParseDecisionVariable) = getParseDecision(labelDomain.category(model.classification(getFeatures3(v)).bestLabelIndex))
-//  def trainFromVariables(vs: Iterable[ParseDecisionVariable], trainer: Trainer, objective: OptimizableObjectives.Multiclass,evaluate: (SparseAndDenseBilinearMulticlassClassifier[_,_,_]) => Unit) {
-//    val examples = vs.map(v => {
-//      val features = getFeatures3(v)
-//      new PredictorExample(model, features, v.target.intValue, objective, 1.0)
-//    })
-//
-//    val rand = new scala.util.Random(0)
-//    (0 until 3).foreach(_ => {
-//      trainer.trainFromExamples(examples.shuffle(rand))
-//      evaluate(model)
-//    })
-//  }
-//
-//  def boosting(ss: Iterable[Sentence], nThreads: Int, trainer: Trainer, objective: OptimizableObjectives.Multiclass,evaluate: SparseAndDenseBilinearMulticlassClassifier[_,_,_] => Unit) =
-//    trainFromVariables(generateDecisions(ss, ParserConstants.BOOSTING, nThreads), trainer, objective,evaluate)
+  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1
 
   lazy val model = new SparseAndDenseClassConditionalLinearMulticlassClassifier[GrowableSparseBinaryTensor1,DenseTensor1](labelDomain.size, featuresDomain.dimensionSize)
 
@@ -245,40 +224,40 @@ object TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.Hyper
 }
 
 
-object TransitionBasedParserWithEmbeddingsTester {
-  def main(args: Array[String]) {
-    val opts = new TransitionBasedParserWithEmbeddingsArgs
-    opts.parse(args)
-    assert(opts.testDir.wasInvoked || opts.testFiles.wasInvoked)
-
-    // load model from file if given,
-    // else if the wsj command line param was specified use wsj model,
-    // otherwise ontonotes model
-    val parser = {
-      val useEmbeddings = opts.useEmbeddings.value
-      if(useEmbeddings) println("using embeddings") else println("not using embeddings")
-      val embedding = if(useEmbeddings)  new WordEmbedding(() => new FileInputStream(opts.embeddingFile.value),opts.embeddingDim.value,opts.numEmbeddingsToTake.value) else null
-      val parser = new TransitionBasedParserWithEmbeddings(embedding)
-      parser.deserialize(new File(opts.modelDir.value))
-      parser
-    }
-
-    assert(!(opts.testDir.wasInvoked && opts.testFiles.wasInvoked))
-    val testFileList = if(opts.testDir.wasInvoked) FileUtils.getFileListFromDir(opts.testDir.value) else opts.testFiles.value.toSeq
-
-    val testPortionToTake =  if(opts.testPortion.wasInvoked) opts.testPortion.value else 1.0
-    val testDocs =  testFileList.map(fname => {
-      if(opts.wsj.value)
-        load.LoadWSJMalt.fromFilename(fname, loadLemma=load.AnnotationTypes.AUTO, loadPos=load.AnnotationTypes.AUTO).head
-      else
-        load.LoadOntonotes5.fromFilename(fname, loadLemma=load.AnnotationTypes.AUTO, loadPos=load.AnnotationTypes.AUTO).head
-    })
-    val testSentencesFull = testDocs.flatMap(_.sentences)
-    val testSentences = testSentencesFull.take((testPortionToTake*testSentencesFull.length).floor.toInt)
-
-    println(parser.testString(testSentences))
-  }
-}
+//object TransitionBasedParserWithEmbeddingsTester {
+//  def main(args: Array[String]) {
+//    val opts = new TransitionBasedParserWithEmbeddingsArgs
+//    opts.parse(args)
+//    assert(opts.testDir.wasInvoked || opts.testFiles.wasInvoked)
+//
+//    // load model from file if given,
+//    // else if the wsj command line param was specified use wsj model,
+//    // otherwise ontonotes model
+//    val parser = {
+//      val useEmbeddings = opts.useEmbeddings.value
+//      if(useEmbeddings) println("using embeddings") else println("not using embeddings")
+//      val embedding = if(useEmbeddings)  new WordEmbedding(() => new FileInputStream(opts.embeddingFile.value),opts.embeddingDim.value,opts.numEmbeddingsToTake.value) else null
+//      val parser = new TransitionBasedParserWithEmbeddings(embedding)
+//      parser.deserialize(new File(opts.modelDir.value))
+//      parser
+//    }
+//
+//    assert(!(opts.testDir.wasInvoked && opts.testFiles.wasInvoked))
+//    val testFileList = if(opts.testDir.wasInvoked) FileUtils.getFileListFromDir(opts.testDir.value) else opts.testFiles.value.toSeq
+//
+//    val testPortionToTake =  if(opts.testPortion.wasInvoked) opts.testPortion.value else 1.0
+//    val testDocs =  testFileList.map(fname => {
+//      if(opts.wsj.value)
+//        load.LoadWSJMalt.fromFilename(fname, loadLemma=load.AnnotationTypes.AUTO, loadPos=load.AnnotationTypes.AUTO).head
+//      else
+//        load.LoadOntonotes5.fromFilename(fname, loadLemma=load.AnnotationTypes.AUTO, loadPos=load.AnnotationTypes.AUTO).head
+//    })
+//    val testSentencesFull = testDocs.flatMap(_.sentences)
+//    val testSentences = testSentencesFull.take((testPortionToTake*testSentencesFull.length).floor.toInt)
+//
+//    println(parser.testString(testSentences))
+//  }
+//}
 
 
 object TransitionBasedParserWithEmbeddingsOptimizer {

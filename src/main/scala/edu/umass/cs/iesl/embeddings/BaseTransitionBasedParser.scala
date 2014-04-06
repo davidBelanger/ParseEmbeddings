@@ -43,6 +43,9 @@ import scala.Some
 import cc.factorie.app.nlp.parse._
 
 
+
+
+
 /** Default transition-based dependency parser. */
 abstract class BaseTransitionBasedParser extends DocumentAnnotator {
 
@@ -58,6 +61,7 @@ abstract class BaseTransitionBasedParser extends DocumentAnnotator {
   object labelDomain extends CategoricalDomain[String]
   val defaultCategory = "-1 -1 N"
   labelDomain += defaultCategory
+
   class ParseDecisionVariable(targetDecision: ParseDecision, val state: ParseState) extends LabeledCategoricalVariable(targetDecision.action) {
     def domain = labelDomain
     val features = new NonProjDependencyParserFeatures(this)
@@ -72,7 +76,6 @@ abstract class BaseTransitionBasedParser extends DocumentAnnotator {
       if("<NULL>".r.findAllIn(featString).length-1 != "\\|".r.findAllIn(featString).length) features += featString
     })
   }
-
   object featuresDomain extends CategoricalVectorDomain[String]
   class NonProjDependencyParserFeatures(val decisionVariable: ParseDecisionVariable) extends BinaryFeatureVectorVariable[String] {
     def domain = featuresDomain
