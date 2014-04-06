@@ -1,12 +1,12 @@
-package cc.factorie.app.nlp.parse
+package edu.umass.cs.iesl.embeddings
 
 import cc.factorie.app.nlp._
 import cc.factorie._
 import app.classify.backend.OnlineLinearMulticlassTrainer
 import embeddings.{WordEmbeddingOptions, WordEmbedding}
-import pos.{SparseAndDenseClassConditionalLinearMulticlassClassifier, SparseAndDenseLinearMulticlassClassifier}
 import java.io._
 import cc.factorie.util._
+import parse.{ParseTree, ParserEval}
 import scala._
 import cc.factorie.optimize._
 import scala.concurrent.Await
@@ -313,3 +313,28 @@ object TransitionBasedParserWithEmbeddingsOptimizer {
   }
 }
 
+
+class TransitionBasedParserArgs extends cc.factorie.util.DefaultCmdOptions with SharedNLPCmdOptions{
+  val trainFiles =  new CmdOption("train", Nil.asInstanceOf[List[String]], "FILENAME...", "")
+  val testFiles =  new CmdOption("test", Nil.asInstanceOf[List[String]], "FILENAME...", "")
+  val trainDir = new CmdOption("trainDir", "", "FILENAME", "Directory containing training files.")
+  val testDir = new CmdOption("testDir", "", "FILENAME", "Directory containing test files.")
+  val devDir = new CmdOption("devDir", "", "FILENAME", "Directory containing dev files.")
+  val devFiles =   new CmdOption("dev", Nil.asInstanceOf[List[String]], "FILENAME...", "")
+  val ontonotes = new CmdOption("onto", true, "BOOLEAN", "Whether data are in Ontonotes format or otherwise (WSJ or CoNLL)")
+  val wsj = new CmdOption("wsj", false, "BOOLEAN", "Whether data are in WSJ format or otherwise (Ontonotes or CoNLL)")
+  val cutoff    = new CmdOption("cutoff", 0, "", "")
+  val loadModel = new CmdOption("load", "", "", "")
+  val nTrainingThreads =  new CmdOption("num-training-threads", 1, "INT", "How many threads to use during training.")
+  val nFeatureThreads =  new CmdOption("num-feature-threads", 1, "INT", "How many threads to use during training.")
+
+  val useSVM =    new CmdOption("use-svm", false, "BOOL", "Whether to use SVMs to train")
+  val modelDir =  new CmdOption("model", "model", "FILENAME", "File in which to save the trained model.")
+  val bootstrapping = new CmdOption("bootstrap", 0, "INT", "The number of bootstrapping iterations to do. 0 means no bootstrapping.")
+  val saveModel = new CmdOption("save-model", true,"BOOLEAN","whether to write out a model file or not")
+  val l1 = new CmdOption("l1", 0.000001,"FLOAT","l1 regularization weight")
+  val l2 = new CmdOption("l2", 0.00001,"FLOAT","l2 regularization weight")
+  val rate = new CmdOption("rate", 10.0,"FLOAT","base learning rate")
+  val maxIters = new CmdOption("max-iterations", 5, "INT", "iterations of training per round")
+  val delta = new CmdOption("delta", 100.0,"FLOAT","learning rate decay")
+}
