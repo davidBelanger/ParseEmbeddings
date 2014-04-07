@@ -1,9 +1,0 @@
-<component name="libraryTable">
-  <library name="jamtio">
-    <CLASSES>
-      <root url="jar://$PROJECT_DIR$/src/main/resources/jamtio.jar!/" />
-    </CLASSES>
-    <JAVADOC />
-    <SOURCES />
-  </library>
-</component>
