@@ -110,10 +110,44 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
 }
 
 
-class TransitionBasedParserWithEmbeddingsArgs extends TransitionBasedParserArgs with WordEmbeddingOptions
+class TransitionBasedParserWithEmbeddingsArgs extends TransitionBasedParserArgs with WordEmbeddingOptions with ParseTensorOptions
 
-object TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.HyperparameterMain {
+object TransitionBasedParserWithParseTensorTrainer extends TransitionBasedParserWithEmbeddingsTrainer{
   def evaluateParameters(args: Array[String]) = {
+    val opts = new TransitionBasedParserWithEmbeddingsArgs
+    opts.parse(args)
+    assert(! (opts.useEmbeddings.value && opts.useTensor.value),"can't specify to use both word embeddings and parsetensor embeddings")
+    assert(opts.useTensor.value,"use TransitionBasedParserWithWordEmbeddingsTrainer if you want to use word embeddings or no embeddings")
+    val tensor = new ParseTensor(opts.tensorFile.value,opts.tensorDomainFile.value)
+
+    val newModelFactory = () =>  new TransitionBasedParserWithParseEmbeddings(tensor)
+    evaluateParametersFromModel(newModelFactory,args)
+
+  }
+}
+
+object TransitionBasedParserWithWordEmbeddingsTrainer extends TransitionBasedParserWithEmbeddingsTrainer{
+  def evaluateParameters(args: Array[String]) = {
+    val opts = new TransitionBasedParserWithEmbeddingsArgs
+    opts.parse(args)
+    assert(! (opts.useEmbeddings.value && opts.useTensor.value),"can't specify to use both word embeddings and parsetensor embeddings")
+
+    val useEmbeddings = opts.useEmbeddings.value
+    if(useEmbeddings) println("using embeddings") else println("not using embeddings")
+    val embedding = if(useEmbeddings)  new WordEmbedding(() => new FileInputStream(opts.embeddingFile.value),opts.embeddingDim.value,opts.numEmbeddingsToTake.value) else null
+
+    val newModelFactory = () =>  new TransitionBasedParserWithWordEmbeddings(embedding)
+    evaluateParametersFromModel(newModelFactory,args)
+
+  }
+}
+
+
+
+abstract class TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.HyperparameterMain {
+  def evaluateParametersFromModel(newModelFactory: () => TransitionBasedParserWithEmbeddings,args: Array[String]) = {
+    val c =  newModelFactory()
+
     val opts = new TransitionBasedParserWithEmbeddingsArgs
     implicit val random = new scala.util.Random(0)
     opts.parse(args)
@@ -164,11 +198,7 @@ object TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.Hyper
 
     // Load other parameters
     val numBootstrappingIterations = opts.bootstrapping.value.toInt
-    val useEmbeddings = opts.useEmbeddings.value
-    if(useEmbeddings) println("using embeddings") else println("not using embeddings")
-    val embedding = if(useEmbeddings)  new WordEmbedding(() => new FileInputStream(opts.embeddingFile.value),opts.embeddingDim.value,opts.numEmbeddingsToTake.value) else null
 
-    val c = new TransitionBasedParserWithWordEmbeddings(embedding)
     val l1 = 2*opts.l1.value / sentences.length
     val l2 = 2*opts.l2.value / sentences.length
     val optimizer = new AdaGradRDA(opts.rate.value, opts.delta.value, l1, l2)
@@ -217,15 +247,16 @@ object TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.Hyper
     //testSentences.foreach(c.process)
 
     testSingle(c, testSentences, "")
+
+    val testLAS = ParserEval.calcLas(testSentences.map(_.attr[ParseTree]))
+    if(opts.targetAccuracy.wasInvoked) cc.factorie.assertMinimalAccuracy(testLAS,opts.targetAccuracy.value.toDouble)
     if (opts.saveModel.value) {
       val modelUrl: String = if (opts.modelDir.wasInvoked) opts.modelDir.value else opts.modelDir.defaultValue + System.currentTimeMillis().toString + ".factorie"
       c.serialize(new java.io.File(modelUrl))
-      val d = new TransitionBasedParserWithWordEmbeddings(embedding)
+      val d = newModelFactory()
       d.deserialize(new java.io.File(modelUrl))
       testSingle(d, testSentences, "Post serialization accuracy ")
     }
-    val testLAS = ParserEval.calcLas(testSentences.map(_.attr[ParseTree]))
-    if(opts.targetAccuracy.wasInvoked) cc.factorie.assertMinimalAccuracy(testLAS,opts.targetAccuracy.value.toDouble)
 
     testLAS
   }
@@ -270,7 +301,7 @@ object TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.Hyper
 
 object TransitionBasedParserWithEmbeddingsOptimizer {
   def main(args: Array[String]) {
-    val opts = new TransitionBasedParserArgs
+    val opts = new TransitionBasedParserWithEmbeddingsArgs
     opts.parse(args)
     opts.saveModel.setValue(false)
     val l1 = cc.factorie.util.HyperParameter(opts.l1, new cc.factorie.util.LogUniformDoubleSampler(1e-10, 1e2))

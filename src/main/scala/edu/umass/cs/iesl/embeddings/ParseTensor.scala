@@ -17,6 +17,7 @@ class ParseTensor(tensorFilename: String, domainFilename: String) {
   println("loading the string -> int domain for the parse tensor")
   val wordDomain = collection.mutable.HashMap[String,Int]()
   val arcDomain = collection.mutable.HashMap[String,Int]()
+  val latentDim = childWeights(0).length
 
   BinarySerializer.deserialize(wordDomain,arcDomain, new File(domainFilename))
   println("there are " + wordDomain.size + " words in the word domain")
@@ -54,4 +55,11 @@ class ParseTensor(tensorFilename: String, domainFilename: String) {
     sum
   }
 
+}
+
+
+trait ParseTensorOptions extends cc.factorie.util.CmdOptions  {
+  val useTensor = new CmdOption("use-parse-tensor",false,"BOOLEAN","Whether to use word embeddings")
+  val tensorFile = new CmdOption("tensor-file", "", "STRING", "path to parsetensor .mat file")
+  val tensorDomainFile = new CmdOption("tensor-domain-file","","STRING","where the word->Int domains are kept for the parsetensor")
 }
