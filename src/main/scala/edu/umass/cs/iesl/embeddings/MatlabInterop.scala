@@ -30,12 +30,12 @@ class MatlabInterop(fn: String){
     val rows = m.getM()
     val cols = m.getN()
     val x = m.asInstanceOf[com.jmatio.types.MLDouble].getArray
-    val t = new DenseTensor2(rows,cols)
+    val t = Array.fill[DenseTensor1](rows)(new DenseTensor1(cols))
     var i = 0;
     while(i < rows){
       var j = 0
       while(j < cols){
-        t(i,j) = x(i)(j)
+        t(i)(j) = x(i)(j)
         j +=1
       }
       i+=1

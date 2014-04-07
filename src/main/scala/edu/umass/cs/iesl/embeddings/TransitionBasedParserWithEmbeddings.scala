@@ -31,18 +31,18 @@ class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends 
     }
   }
 
-  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
-    new DenseTensor1(labelDomain.size,getEmbedding(w1).dot(getEmbedding(w2)))
+  def getDenseFeaturesFromStrings(w1: String, w2: String,domainSize: Int): DenseTensor1 = {
+    new DenseTensor1(domainSize,getEmbedding(w1).dot(getEmbedding(w2)))
   }
 }
 
-class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends TransitionBasedParserWithWordEmbeddings{
-  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
+class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends TransitionBasedParserWithEmbeddings{
+  def getDenseFeaturesFromStrings(w1: String, w2: String,domainSize: Int): DenseTensor1 = {
     tensor.getScoresForPair(w1,w2)
   }
 }
 
-class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedParser {
+abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedParser {
 
   def serialize(stream: java.io.OutputStream): Unit = {
     import cc.factorie.util.CubbieConversions._
@@ -77,16 +77,16 @@ class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedParser {
   }
 
   def getDenseFeatures(v: ParseDecisionVariable): DenseTensor1 = {
-    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.lambdaToken(0).form)
+    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.lambdaToken(0).form,labelDomain.size)
   }
-  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1
+  def getDenseFeaturesFromStrings(w1: String, w2: String,domainSize: Int): DenseTensor1
 
   lazy val model = new SparseAndDenseClassConditionalLinearMulticlassClassifier[GrowableSparseBinaryTensor1,DenseTensor1](labelDomain.size, featuresDomain.dimensionSize)
 
-  def classify(v: ParseDecisionVariable) = getParseDecision(labelDomain.category(model.classification(getFeatures2(v)).bestLabelIndex))
+  def classify(v: ParseDecisionVariable) = getParseDecision(labelDomain.category(model.classification(getFeatures(v)).bestLabelIndex))
   def trainFromVariables(vs: Iterable[ParseDecisionVariable], trainer: Trainer, objective: OptimizableObjectives.Multiclass,evaluate: (SparseAndDenseClassConditionalLinearMulticlassClassifier[_,_]) => Unit) {
     val examples = vs.map(v => {
-      val features = getFeatures2(v)
+      val features = getFeatures(v)
       new PredictorExample(model, features, v.target.intValue, objective, 1.0)
     })
 
@@ -160,7 +160,7 @@ object TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.Hyper
     if(useEmbeddings) println("using embeddings") else println("not using embeddings")
     val embedding = if(useEmbeddings)  new WordEmbedding(() => new FileInputStream(opts.embeddingFile.value),opts.embeddingDim.value,opts.numEmbeddingsToTake.value) else null
 
-    val c = new TransitionBasedParserWithEmbeddings(embedding)
+    val c = new TransitionBasedParserWithWordEmbeddings(embedding)
     val l1 = 2*opts.l1.value / sentences.length
     val l2 = 2*opts.l2.value / sentences.length
     val optimizer = new AdaGradRDA(opts.rate.value, opts.delta.value, l1, l2)
@@ -212,7 +212,7 @@ object TransitionBasedParserWithEmbeddingsTrainer extends cc.factorie.util.Hyper
     if (opts.saveModel.value) {
       val modelUrl: String = if (opts.modelDir.wasInvoked) opts.modelDir.value else opts.modelDir.defaultValue + System.currentTimeMillis().toString + ".factorie"
       c.serialize(new java.io.File(modelUrl))
-      val d = new TransitionBasedParserWithEmbeddings(embedding)
+      val d = new TransitionBasedParserWithWordEmbeddings(embedding)
       d.deserialize(new java.io.File(modelUrl))
       testSingle(d, testSentences, "Post serialization accuracy ")
     }

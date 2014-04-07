@@ -3,12 +3,13 @@ package edu.umass.cs.iesl.embeddings
 import cc.factorie.la.{DenseTensor1, DenseTensor2}
 import cc.factorie.util.BinarySerializer
 import collection.immutable.HashMap
+import java.io.File
 
 
 class ParseTensor(tensorFilename: String, domainFilename: String) {
   //load the tensor
   println("loading the parse tensor")
-  val matlab = new MatlabInterop(filename)
+  val matlab = new MatlabInterop(tensorFilename)
   val childWeights = matlab.getArrayOfTensor1("child")
   val parentWeights = matlab.getArrayOfTensor1("parent")
   val arcWeights = matlab.getTensor2("arc")
@@ -17,7 +18,7 @@ class ParseTensor(tensorFilename: String, domainFilename: String) {
   val wordDomain = collection.mutable.HashMap[String,Int]()
   val arcDomain = collection.mutable.HashMap[String,Int]()
 
-  BinarySerializer.deserialize(domainFilename,wordDomain,arcDomain)
+  BinarySerializer.deserialize(wordDomain,arcDomain, new File(domainFilename))
   println("there are " + wordDomain.size + " words in the word domain")
   println("there are " + arcDomain.size  + " arcs in the arc domain  ")
   assert(wordDomain.contains("OOV"))
