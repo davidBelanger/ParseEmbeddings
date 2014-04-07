@@ -16,9 +16,10 @@ import cc.factorie.app.nlp.load
 import cc.factorie.optimize.OptimizableObjectives
 import cc.factorie.la.{GrowableSparseBinaryTensor1}
 import cc.factorie.DenseTensor1
+import variable.CategoricalDomain
 
 class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends TransitionBasedParserWithEmbeddings{
-  val denseFeatureDomainSize = 1
+  val denseFeatureDomainSize = labelDomain.size
   val defaultEmbedding = new DenseTensor1(denseFeatureDomainSize)
   def getEmbedding(str: String) : DenseTensor1 = {
     if (embedding == null)
@@ -31,14 +32,21 @@ class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends 
     }
   }
 
-  def getDenseFeaturesFromStrings(w1: String, w2: String,domainSize: Int): DenseTensor1 = {
-    new DenseTensor1(domainSize,getEmbedding(w1).dot(getEmbedding(w2)))
+  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
+    new DenseTensor1(labelDomain.size,getEmbedding(w1).dot(getEmbedding(w2)))
   }
 }
 
 class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends TransitionBasedParserWithEmbeddings{
-  def getDenseFeaturesFromStrings(w1: String, w2: String,domainSize: Int): DenseTensor1 = {
-    tensor.getScoresForPair(w1,w2)
+  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
+    val output = new DenseTensor1(labelDomain.size)
+
+    val string2score = tensor.getScoresForPair(w1,w2)
+    (0 until labelDomain.size).foreach( i=> {
+      val Array(_, _, label) = labelDomain.category(i).split(" ")
+      output(i) = string2score(label)
+    })
+    output
   }
 }
 
@@ -77,9 +85,9 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
   }
 
   def getDenseFeatures(v: ParseDecisionVariable): DenseTensor1 = {
-    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.lambdaToken(0).form,labelDomain.size)
+    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.lambdaToken(0).form)
   }
-  def getDenseFeaturesFromStrings(w1: String, w2: String,domainSize: Int): DenseTensor1
+  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1
 
   lazy val model = new SparseAndDenseClassConditionalLinearMulticlassClassifier[GrowableSparseBinaryTensor1,DenseTensor1](labelDomain.size, featuresDomain.dimensionSize)
 

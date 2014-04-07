@@ -25,21 +25,13 @@ class ParseTensor(tensorFilename: String, domainFilename: String) {
   val oovIndex = wordDomain("OOV")
 
   def getWordIndex(w: String): Int = wordDomain.getOrElse(w,oovIndex)
-  //todo: need to unpack this to have the right order w.r.t the current domain
-  def getScoresForPair(childWord: String, parentWord: String): DenseTensor1  = {
+  //todo: maybe make different failure modes for the case both words are OOV v.s. one is OOV
+  def getScoresForPair(childWord: String, parentWord: String)  = {
     val childIndex = getWordIndex(childWord)
     val parentIndex = getWordIndex(parentWord)
-    getScoresForPair(childIndex,parentIndex)
+    arcDomain.mapValues(getScoresForArc(childIndex,parentIndex,_))
   }
 
-  def getScoresForPair(childIndex: Int, parentIndex: Int) : DenseTensor1 = {
-//     val child = childWeights(childIndex)
-//     val parent = parentWeights(parentIndex)
-//     val r = arcWeights.leftMultiply(child)
-//      r.dot(parent)
-//       .dot(parent)
-    ???
-  }
 
   def getScoresForArc(childIndex: Int, parentIndex: Int, arcIndex: Int) : Double = {
     val child = childWeights(childIndex)
