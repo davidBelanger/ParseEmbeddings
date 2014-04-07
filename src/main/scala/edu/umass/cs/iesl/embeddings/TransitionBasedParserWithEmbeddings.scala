@@ -44,7 +44,9 @@ class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends Tran
     val string2score = tensor.getScoresForPair(w1,w2)
     (0 until labelDomain.size).foreach( i=> {
       val Array(_, _, label) = labelDomain.category(i).split(" ")
-      output(i) = string2score(label)
+
+      val score = if(label == "N") 0.0 else string2score(label)
+      output(i) = score
     })
     output
   }

@@ -19,7 +19,9 @@ class ParseTensor(tensorFilename: String, domainFilename: String) {
   val arcDomain = collection.mutable.HashMap[String,Int]()
   val latentDim = childWeights(0).length
 
-  BinarySerializer.deserialize(wordDomain,arcDomain, new File(domainFilename))
+  BinarySerializer.deserialize(wordDomain,new File(domainFilename + ".words"))
+  BinarySerializer.deserialize(arcDomain,new File(domainFilename + ".arcs"))
+
   println("there are " + wordDomain.size + " words in the word domain")
   println("there are " + arcDomain.size  + " arcs in the arc domain  ")
   assert(wordDomain.contains("OOV"))
