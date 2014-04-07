@@ -6,7 +6,16 @@ import collection.immutable.HashMap
 import java.io.File
 
 
-class ParseTensor(tensorFilename: String, domainFilename: String) {
+trait ParseTensor{
+  val wordDomain = collection.mutable.HashMap[String,Int]()
+  val arcDomain = collection.mutable.HashMap[String,Int]()
+
+  def getScoresForPair(childWord: String, parentWord: String) : collection.Map[String,Double]
+  def getWordIndex(w: String): Int
+
+}
+
+class KruskalParseTensor(tensorFilename: String, domainFilename: String) extends ParseTensor{
   //load the tensor
   println("loading the parse tensor")
   val matlab = new MatlabInterop(tensorFilename)
@@ -15,8 +24,7 @@ class ParseTensor(tensorFilename: String, domainFilename: String) {
   val arcWeights = matlab.getTensor2("arc")
   val arcWeightsArray = matlab.getArrayOfTensor1("arc")
   println("loading the string -> int domain for the parse tensor")
-  val wordDomain = collection.mutable.HashMap[String,Int]()
-  val arcDomain = collection.mutable.HashMap[String,Int]()
+
   val latentDim = childWeights(0).length
 
   BinarySerializer.deserialize(wordDomain,new File(domainFilename + ".words"))
@@ -29,12 +37,11 @@ class ParseTensor(tensorFilename: String, domainFilename: String) {
 
   def getWordIndex(w: String): Int = wordDomain.getOrElse(w,oovIndex)
   //todo: maybe make different failure modes for the case both words are OOV v.s. one is OOV
-  def getScoresForPair(childWord: String, parentWord: String)  = {
+  def getScoresForPair(childWord: String, parentWord: String) : collection.Map[String,Double]  = {
     val childIndex = getWordIndex(childWord)
     val parentIndex = getWordIndex(parentWord)
     arcDomain.mapValues(getScoresForArc(childIndex,parentIndex,_))
   }
-
 
   def getScoresForArc(childIndex: Int, parentIndex: Int, arcIndex: Int) : Double = {
     val child = childWeights(childIndex)

@@ -38,7 +38,12 @@ class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends 
 }
 
 class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends TransitionBasedParserWithEmbeddings{
+  val tensorScoreIsSymmetric = true
   def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
+    if(tensorScoreIsSymmetric) getDenseFeaturesFromStringsSymmetric(w1,w2)
+    else getDenseFeaturesFromStringsAssymmetric(w1,w2)
+  }
+  def getDenseFeaturesFromStringsSymmetric(w1: String, w2: String): DenseTensor1 = {
     val output = new DenseTensor1(labelDomain.size)
 
     val string2score = tensor.getScoresForPair(w1,w2)
@@ -46,6 +51,37 @@ class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends Tran
       val Array(_, _, label) = labelDomain.category(i).split(" ")
 
       val score = if(label == "N") 0.0 else string2score(label)
+      output(i) = score
+    })
+
+
+    //todo for debugging . remove
+    println("\n\n"+w1 + " " + w2)
+    (0 until labelDomain.size).foreach( i=> {
+      val Array(_, _, label) = labelDomain.category(i).split(" ")
+      println(label + " " + output(i))
+    })
+    output
+  }
+
+  def getDenseFeaturesFromStringsAssymmetric(w1: String, w2: String): DenseTensor1 = {
+    val output = new DenseTensor1(labelDomain.size)
+
+    val string2score_child2parent = tensor.getScoresForPair(w1,w2)
+    val string2score_parent2child = tensor.getScoresForPair(w1,w2)
+
+    (0 until labelDomain.size).foreach( i=> {
+      val Array(lrnS, srpS, label) = labelDomain.category(i).split(" ")        //todo: precompute these things
+      val leftOrRightOrNo = lrnS.toInt 		// leftarc-rightarc-noarc
+      val child2parent = true //todo
+      assert(1==0)
+
+      val score = if(label == "N") 0.0 else {
+         if(child2parent)
+           string2score_child2parent(label)
+        else
+           string2score_parent2child(label)
+      }
       output(i) = score
     })
     output
@@ -87,7 +123,8 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
   }
 
   def getDenseFeatures(v: ParseDecisionVariable): DenseTensor1 = {
-    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.lambdaToken(0).form)
+    println("input %s lambda %s stack %s".format(v.state.inputToken(0).form,v.state.lambdaToken(0).form,v.state.stackToken(0).form))
+    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.inputToken(0).form)
   }
   def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1
 
@@ -120,7 +157,7 @@ object TransitionBasedParserWithParseTensorTrainer extends TransitionBasedParser
     opts.parse(args)
     assert(! (opts.useEmbeddings.value && opts.useTensor.value),"can't specify to use both word embeddings and parsetensor embeddings")
     assert(opts.useTensor.value,"use TransitionBasedParserWithWordEmbeddingsTrainer if you want to use word embeddings or no embeddings")
-    val tensor = new ParseTensor(opts.tensorFile.value,opts.tensorDomainFile.value)
+    val tensor = new KruskalParseTensor(opts.tensorFile.value,opts.tensorDomainFile.value)
 
     val newModelFactory = () =>  new TransitionBasedParserWithParseEmbeddings(tensor)
     evaluateParametersFromModel(newModelFactory,args)
