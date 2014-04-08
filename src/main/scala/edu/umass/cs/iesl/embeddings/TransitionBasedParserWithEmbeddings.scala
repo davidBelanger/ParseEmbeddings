@@ -58,11 +58,11 @@ class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends Tran
 
 
     //todo for debugging . remove
-    println("\n\n"+w1 + " " + w2)
-    (0 until labelDomain.size).foreach( i=> {
-      val Array(_, _, label) = labelDomain.category(i).split(" ")
-      println(label + " " + output(i))
-    })
+//    println("\n\n"+w1 + " " + w2)
+//    (0 until labelDomain.size).foreach( i=> {
+//      val Array(_, _, label) = labelDomain.category(i).split(" ")
+//      println(label + " " + output(i))
+//    })
     output
   }
 
@@ -124,7 +124,6 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
   }
 
   def getDenseFeatures(v: ParseDecisionVariable): DenseTensor1 = {
-    println("input %s lambda %s stack %s".format(v.state.inputToken(0).form,v.state.lambdaToken(0).form,v.state.stackToken(0).form))
     getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.inputToken(0).form)
   }
   def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1
