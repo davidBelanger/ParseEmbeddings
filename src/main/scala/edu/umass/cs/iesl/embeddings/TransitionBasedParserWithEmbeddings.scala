@@ -38,10 +38,12 @@ class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends 
 }
 
 class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends TransitionBasedParserWithEmbeddings{
-  val tensorScoreIsSymmetric = true
+  val tensorScoreIsSymmetric = false
   def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
-    if(tensorScoreIsSymmetric) getDenseFeaturesFromStringsSymmetric(w1,w2)
-    else getDenseFeaturesFromStringsAssymmetric(w1,w2)
+    if(tensorScoreIsSymmetric)
+      getDenseFeaturesFromStringsSymmetric(w1,w2)
+    else
+      getDenseFeaturesFromStringsAssymmetric(w1,w2)
   }
   def getDenseFeaturesFromStringsSymmetric(w1: String, w2: String): DenseTensor1 = {
     val output = new DenseTensor1(labelDomain.size)
@@ -73,8 +75,7 @@ class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends Tran
     (0 until labelDomain.size).foreach( i=> {
       val Array(lrnS, srpS, label) = labelDomain.category(i).split(" ")        //todo: precompute these things
       val leftOrRightOrNo = lrnS.toInt 		// leftarc-rightarc-noarc
-      val child2parent = true //todo
-      assert(1==0)
+      val child2parent = leftOrRightOrNo ==  ParserConstants.RIGHT //todo: check this
 
       val score = if(label == "N") 0.0 else {
          if(child2parent)
