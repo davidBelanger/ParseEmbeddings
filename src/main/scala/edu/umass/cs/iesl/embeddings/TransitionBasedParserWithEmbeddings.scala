@@ -19,7 +19,7 @@ import cc.factorie.DenseTensor1
 import variable.CategoricalDomain
 
 class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends TransitionBasedParserWithEmbeddings{
-  val denseFeatureDomainSize = labelDomain.size
+  val denseFeatureDomainSize = embedding.dimensionSize
   val defaultEmbedding = new DenseTensor1(denseFeatureDomainSize)
   def getEmbedding(str: String) : DenseTensor1 = {
     if (embedding == null)
@@ -33,7 +33,8 @@ class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends 
   }
 
   def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
-    new DenseTensor1(labelDomain.size,getEmbedding(w1).dot(getEmbedding(w2)))
+    val value = getEmbedding(w1).dot(getEmbedding(w2))
+    new DenseTensor1(labelDomain.size,value)
   }
 }
 
@@ -84,7 +85,7 @@ class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends Tran
 
     //todo for debugging . remove
     val idx = (0 until labelDomain.size).maxBy(output(_))
-    println("\n\n"+w1 + " " + w2 + " " + output(idx))
+    println(w1 + " " + w2 + " " + output(idx))
 
 
     output
@@ -121,7 +122,7 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
   val digit = """\d""".r
   def isNumber(s: String) : Boolean = s.exists(c => c.isDigit)
   def normalizeForm(s: String): String = {
-    if(isNumber(s)) "NUM" else s.toLowerCase
+    if(isNumber(s)) "num" else s.toLowerCase
   }
 
   def getFeatures(v: ParseDecisionVariable): (GrowableSparseBinaryTensor1,DenseTensor1) =  {
@@ -130,7 +131,7 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
   }
 
   def getDenseFeatures(v: ParseDecisionVariable): DenseTensor1 = {
-    getDenseFeaturesFromStrings(v.stackWord, v.inputWord)
+    getDenseFeaturesFromStrings(normalizeForm(v.stackWord), normalizeForm(v.inputWord))
   }
   def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1
 

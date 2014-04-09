@@ -34,6 +34,8 @@ class KruskalParseTensor(tensorFilename: String, domainFilename: String) extends
   println("there are " + wordDomain.size + " words in the word domain")
   println("there are " + arcDomain.size  + " arcs in the arc domain  ")
   assert(wordDomain.contains("OOV"))
+  val rootIndex = wordDomain("root")
+  wordDomain += "<root>" -> rootIndex
   val oovIndex = wordDomain("OOV")
   val numWordsInTensor = childWeights.length
   def getWordIndex(w: String): Int = wordDomain.get(w).filter(_ < numWordsInTensor).getOrElse(oovIndex)
