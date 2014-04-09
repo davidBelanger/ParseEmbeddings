@@ -6,6 +6,7 @@ import collection.immutable.HashMap
 import java.io.File
 
 
+
 trait ParseTensor{
   val wordDomain = collection.mutable.HashMap[String,Int]()
   val arcDomain = collection.mutable.HashMap[String,Int]()
@@ -34,8 +35,10 @@ class KruskalParseTensor(tensorFilename: String, domainFilename: String) extends
   println("there are " + arcDomain.size  + " arcs in the arc domain  ")
   assert(wordDomain.contains("OOV"))
   val oovIndex = wordDomain("OOV")
+  val numWordsInTensor = childWeights.length
+  def getWordIndex(w: String): Int = wordDomain.get(w).filter(_ < numWordsInTensor).getOrElse(oovIndex)
 
-  def getWordIndex(w: String): Int = wordDomain.getOrElse(w,oovIndex)
+
   //todo: maybe make different failure modes for the case both words are OOV v.s. one is OOV
   def getScoresForPair(childWord: String, parentWord: String) : collection.Map[String,Double]  = {
     val childIndex = getWordIndex(childWord)

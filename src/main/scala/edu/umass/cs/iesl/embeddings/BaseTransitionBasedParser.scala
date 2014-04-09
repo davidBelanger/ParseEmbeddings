@@ -65,6 +65,8 @@ abstract class BaseTransitionBasedParser extends DocumentAnnotator {
   class ParseDecisionVariable(targetDecision: ParseDecision, val state: ParseState) extends LabeledCategoricalVariable(targetDecision.action) {
     def domain = labelDomain
     val features = new NonProjDependencyParserFeatures(this)
+    val stackWord = state.stackToken(0).form
+    val inputWord = state.inputToken(0).form
 
     /* Include <NULL>s */
     //    featureGenerators.foreach(f => features += f.apply(state))

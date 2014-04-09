@@ -57,12 +57,7 @@ class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends Tran
     })
 
 
-    //todo for debugging . remove
-//    println("\n\n"+w1 + " " + w2)
-//    (0 until labelDomain.size).foreach( i=> {
-//      val Array(_, _, label) = labelDomain.category(i).split(" ")
-//      println(label + " " + output(i))
-//    })
+
     output
   }
 
@@ -85,6 +80,13 @@ class TransitionBasedParserWithParseEmbeddings(tensor: ParseTensor) extends Tran
       }
       output(i) = score
     })
+
+
+    //todo for debugging . remove
+    val idx = (0 until labelDomain.size).maxBy(output(_))
+    println("\n\n"+w1 + " " + w2 + " " + output(idx))
+
+
     output
   }
 }
@@ -116,7 +118,11 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
     println("TransitionBasedParser model parameters oneNorm "+model.parameters.oneNorm)
     dstream.close()
   }
-
+  val digit = """\d""".r
+  def isNumber(s: String) : Boolean = s.exists(c => c.isDigit)
+  def normalizeForm(s: String): String = {
+    if(isNumber(s)) "NUM" else s.toLowerCase
+  }
 
   def getFeatures(v: ParseDecisionVariable): (GrowableSparseBinaryTensor1,DenseTensor1) =  {
     val denseFeatures =  getDenseFeatures(v)
@@ -124,7 +130,7 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
   }
 
   def getDenseFeatures(v: ParseDecisionVariable): DenseTensor1 = {
-    getDenseFeaturesFromStrings(v.state.stackToken(0).form, v.state.inputToken(0).form)
+    getDenseFeaturesFromStrings(v.stackWord, v.inputWord)
   }
   def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1
 
