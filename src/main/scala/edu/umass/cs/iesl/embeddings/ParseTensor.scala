@@ -20,6 +20,7 @@ class KruskalParseTensor(tensorFilename: String, domainFilename: String) extends
   //load the tensor
   println("loading the parse tensor")
   val matlab = new MatlabInterop(tensorFilename)
+  //todo: change this to use wordEmbeddingFromBinary
   val childWeights = matlab.getArrayOfTensor1("child")
   val parentWeights = matlab.getArrayOfTensor1("parent")
   val arcWeights = matlab.getTensor2("arc")

@@ -12,6 +12,16 @@ import concurrent.duration.Duration
 import concurrent.{Future, Await}
 import concurrent.ExecutionContext.Implicits.global
 import akka.actor.Status.Success
+import java.io._
+import java.util.zip.{GZIPInputStream, GZIPOutputStream}
+import scala.Some
+import akka.actor.Status.Success
+import scala.Some
+import akka.actor.Status.Success
+import scala.Some
+import akka.actor.Status.Success
+import scala.Some
+import akka.actor.Status.Success
 
 
 trait FactorizationModel{
@@ -74,6 +84,8 @@ class MatrixFactorizationOptions  extends cc.factorie.util.DefaultCmdOptions{
   val latentDimensionality = new CmdOption("latent-dim", "", "INT", "latent dimensionality")
   val trainFile = new CmdOption("train", "", "FILE", "where to get training triples from")
   val outFile = new CmdOption("out","","FILE","where to write out the learned matrix")
+  val numPasses = new CmdOption("num-passes","1","INT","how many passes over the dataset")
+  val numExamples = new CmdOption("num-examples","-1","INT","how many examples to use")
 }
 
 object MatrixFactorization{
@@ -94,11 +106,17 @@ object MatrixFactorization{
     val rowRegularizer = 0.05
     val colRegularizer = 0.05
     println("allocating model")
+    assert(opts.outFile.wasInvoked)
+
     val model = new SymmetricMatrixFactorizationModel(latentDimensionality,numRows,rowRegularizer,initVector,OptimizableObjectives.logBinary, OptimizableObjectives.logisticLinkFunction)
     //////////////
 
-    val examples: Iterator[(Int,Int,Int)] = readTriplesFromFile(opts.trainFile.value)
+    val examplesFull: Iterator[(Int,Int,Int)] = (0 until opts.numPasses.value.toInt).toIterator.flatMap( i=> BinaryTriples.readAsciiTriplesFromFile(opts.trainFile.value))
+    val examples = if(!opts.numExamples.wasInvoked) examplesFull else examplesFull.take(opts.numExamples.value.toInt)
+    //
+    val start = System.currentTimeMillis()
     train(model,examples)
+    println("train time " + .001*(System.currentTimeMillis() - start))
     model.serialize(opts.outFile.value)
 
 
@@ -123,7 +141,7 @@ object MatrixFactorization{
           totalProcessed += exs.length
 
 
-          if(iter % 25 == 0){
+          if(iter % 100 == 0){
             println("finished  " + iter*blockSize + " objective = " + objective/totalProcessed)
             objective = 0.0
             totalProcessed = 0
@@ -148,8 +166,103 @@ object MatrixFactorization{
     obj
   }
 
-  def readTriplesFromFile(f: String): Iterator[(Int,Int,Int)] = {
-    io.Source.fromFile(f).getLines.map(line => {
+
+}
+
+
+object GetCounts{
+  def main(args: Array[String]): Unit = {
+    val tripleCounts = collection.mutable.HashMap[(Int,Int,Int),Int]().withDefaultValue(0)
+    val pairCounts = collection.mutable.HashMap[(Int,Int),Int]().withDefaultValue(0)
+
+    val iter = BinaryTriples.readAsciiTriplesFromFile(args(0))
+    iter.foreach(triple => {
+       val pair = (triple._1,triple._2)
+       pairCounts(pair) += 1
+       tripleCounts(tripe) += 1
+    })
+    val writer1 = new PrintWriter(new OutputStreamWriter(
+      new GZIPOutputStream(new FileOutputStream(args(1) + ".triple")), "UTF-8"))
+    tripleCounts.iterator.foreach(it => {
+       writer1.println(it._1.mkString(" ") + " " + it._2)
+    })
+    writer1.flush(); writer1.close()
+
+
+    val writer2 = new PrintWriter(new OutputStreamWriter(
+      new GZIPOutputStream(new FileOutputStream(args(1) + ".pair")), "UTF-8"))
+    pairCounts.iterator.foreach(it => {
+      writer.println(it._1.mkString(" ") + " " + it._2)
+    })
+    writer2.flush(); writer2.close()
+  }
+}
+
+
+ //todo: make stuff use counts
+
+object BinaryQuadruples{
+  def main(args: Array[String]): Unit = {
+    val iter = readAsciiTriplesFromFile(args(0))
+    serialize(iter,args(1))
+  }
+
+  def readAsciiQuadruplesFromFile(f: String,gzip: Boolean = true): Iterator[(Int,Int,Int,Int)] = {
+    val reader =
+      if (!gzip)
+        io.Source.fromFile(f)
+      else
+        io.Source.fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(f))))
+
+    reader.getLines.map(line => {
+      val fields = line.split(" ")
+      (fields(0).toInt , fields(1).toInt, fields(2).toInt,fields(3).toInt)
+    })
+  }
+}
+
+object BinaryTriples{
+  def main(args: Array[String]): Unit = {
+      val iter = readAsciiTriplesFromFile(args(0))
+      serialize(iter,args(1))
+  }
+  def serialize(iter: Iterator[(Int,Int,Int)], out: String) : Unit = {
+    val writer = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(out))))
+    iter.foreach(abc => {writer.writeInt(abc._1); writer.writeInt(abc._2); writer.writeInt(abc._3)} )
+    writer.flush()
+    writer.close()
+  }
+  def deserialize(in: String): Iterator[(Int,Int,Int)] = {
+    val reader = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(in))))
+
+    var nextTriple = null: (Int,Int,Int)
+    getNext()
+    def getNext(): Unit  = {
+      try {
+        nextTriple = (reader.readInt(),reader.readInt(),reader.readInt())
+      } catch{
+        case e: EOFException => nextTriple = null
+      }
+    }
+
+    new Iterator[(Int,Int,Int)]{
+      def hasNext = nextTriple != null
+      def next() = {
+        val d = nextTriple
+        getNext()
+        d
+      }
+    }
+
+  }
+  def readAsciiTriplesFromFile(f: String,gzip: Boolean = true): Iterator[(Int,Int,Int)] = {
+    val reader =
+    if (!gzip)
+      io.Source.fromFile(f)
+    else
+      io.Source.fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(f))))
+
+    reader.getLines.map(line => {
       val fields = line.split(" ")
       (fields(0).toInt , fields(1).toInt, fields(2).toInt)
     })

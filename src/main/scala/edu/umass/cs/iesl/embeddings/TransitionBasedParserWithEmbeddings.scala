@@ -18,7 +18,29 @@ import cc.factorie.la.{GrowableSparseBinaryTensor1}
 import cc.factorie.DenseTensor1
 import variable.CategoricalDomain
 
-class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbedding) extends TransitionBasedParserWithEmbeddings{
+
+
+class TransitionBasedParserWithWordEmbeddings(embedding: WordEmbeddingFromBinary) extends TransitionBasedParserWithEmbeddings{
+  val denseFeatureDomainSize = embedding.dimensionSize
+  val defaultEmbedding = new DenseTensor1(denseFeatureDomainSize)
+  def getEmbedding(str: String) : DenseTensor1 = {
+    if (embedding == null)
+      defaultEmbedding
+    else {
+      if(embedding.contains(str))
+        embedding(str)
+      else
+        defaultEmbedding
+    }
+  }
+
+  def getDenseFeaturesFromStrings(w1: String, w2: String): DenseTensor1 = {
+    val value = getEmbedding(w1).dot(getEmbedding(w2))
+    new DenseTensor1(labelDomain.size,value)
+  }
+}
+ //todo: dedup with above
+class TransitionBasedParserWithWordEmbeddings2(embedding: WordEmbedding) extends TransitionBasedParserWithEmbeddings{
   val denseFeatureDomainSize = embedding.dimensionSize
   val defaultEmbedding = new DenseTensor1(denseFeatureDomainSize)
   def getEmbedding(str: String) : DenseTensor1 = {
@@ -156,7 +178,9 @@ abstract class TransitionBasedParserWithEmbeddings extends BaseTransitionBasedPa
 }
 
 
-class TransitionBasedParserWithEmbeddingsArgs extends TransitionBasedParserArgs with WordEmbeddingOptions with ParseTensorOptions
+class TransitionBasedParserWithEmbeddingsArgs extends TransitionBasedParserArgs with WordEmbeddingOptions with ParseTensorOptions  {
+  val embeddingDomainFile = new CmdOption("embedding-domain","", "STRING", "embedding domain file")
+}
 
 object TransitionBasedParserWithParseTensorTrainer extends TransitionBasedParserWithEmbeddingsTrainer{
   def evaluateParameters(args: Array[String]) = {
@@ -180,7 +204,9 @@ object TransitionBasedParserWithWordEmbeddingsTrainer extends TransitionBasedPar
 
     val useEmbeddings = opts.useEmbeddings.value
     if(useEmbeddings) println("using embeddings") else println("not using embeddings")
-    val embedding = if(useEmbeddings)  new WordEmbedding(() => new FileInputStream(opts.embeddingFile.value),opts.embeddingDim.value,opts.numEmbeddingsToTake.value) else null
+
+    val embedding = if(useEmbeddings)  new WordEmbeddingFromBinary(opts.embeddingFile.value,opts.embeddingDomainFile.value,opts.numEmbeddingsToTake.value) else null
+   // val embedding = if(useEmbeddings)  new WordEmbedding(() => new FileInputStream(opts.embeddingFile.value),opts.embeddingDim.value,opts.numEmbeddingsToTake.value) else null
 
     val newModelFactory = () =>  new TransitionBasedParserWithWordEmbeddings(embedding)
     evaluateParametersFromModel(newModelFactory,args)
