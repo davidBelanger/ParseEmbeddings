@@ -82,7 +82,37 @@ abstract class MatrixFactorizationModel(val latentDim: Int,val rowRegularizer: D
 
 }
 
+abstract class AsymmetricTensorFactorizationModel(latentDim: Int,val numRows: Int,val numCols: Int,val numThird: Int,rowRegularizer: Double, colRegularizer: Double,thirdRegularizer: Double,initializeRow: Int => Array[Double],initializeCol: Int => Array[Double],initializeThird: Int => Array[Double],objective: UnivariateOptimizableObjective[Int],linkFunction: OptimizableObjectives.UnivariateLinkFunction) extends TensorFactorizationModel(latentDim,rowRegularizer, colRegularizer,thirdRegularizer,objective,linkFunction){
+  private val rowVectors = (0 until numRows).map(i => new DenseTensor1(initializeRow(i)))
+  private val colVectors = (0 until numCols).map(i => new DenseTensor1(initializeCol(i)))
+  private val thirdVectors = (0 until numThird).map(i => new DenseTensor1(initializeThird(i)))
 
+  def rowVector(i: Int): DenseTensor1  = rowVectors(i)
+  def colVector(j: Int): DenseTensor1 = colVectors(j)
+  def thirdVector(k: Int): DenseTensor1 = thirdVectors(k)
+
+  def serialize(out: String) = {
+    EmbeddingSerialization.serialize(out + ".rows",rowVectors)
+    EmbeddingSerialization.serialize(out + ".cols",colVectors)
+    EmbeddingSerialization.serialize(out + ".arcs",thirdVectors)
+  }
+}
+
+abstract class SymmetricTensorFactorizationModel(latentDim: Int,numRowsCols: Int, val numThird: Int,regularizer: Double, thirdRegularizer: Double,initialize: Int => Array[Double],objective: UnivariateOptimizableObjective[Int],linkFunction: OptimizableObjectives.UnivariateLinkFunction) extends TensorFactorizationModel(latentDim,regularizer, regularizer,thirdRegularizer,objective,linkFunction){
+  private val vectors = (0 until numRowsCols).map(i => new DenseTensor1(initialize(i)))
+  private val thirdVectors = (0 until numRowsCols).map(i => new DenseTensor1(initialize(i)))
+
+  def rowVector(i: Int): DenseTensor1  = vectors(i)
+  def colVector(j: Int): DenseTensor1 = vectors(j)
+  def thirdVector(k: Int): DenseTensor1 = thirdVectors(k)
+
+  val numRows = numRowsCols
+  val numCols = numRowsCols
+  def serialize(out: String) = {
+    EmbeddingSerialization.serialize(out + ".words",vectors)
+    EmbeddingSerialization.serialize(out + ".arcs",vectors)
+  }
+}
 
 ////Tensor Stuff
 abstract class TensorFactorizationModel(val latentDim: Int,val rowRegularizer: Double, val colRegularizer: Double,val thirdRegularizer: Double,val objective: UnivariateOptimizableObjective[Int],linkFunction: OptimizableObjectives.UnivariateLinkFunction) extends FactorizationModel{
