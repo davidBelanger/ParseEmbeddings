@@ -16,16 +16,12 @@ trait ParseTensor{
 
 }
 
-class KruskalParseTensor(tensorFilename: String, domainFilename: String) extends ParseTensor{
+class KruskalParseTensor(tensorFilename: String, domainFilename: String, numTake: Int = -1) extends ParseTensor{
   //load the tensor
   println("loading the parse tensor")
-  val matlab = new MatlabInterop(tensorFilename)
-  //todo: change this to use wordEmbeddingFromBinary
-  val childWeights = matlab.getArrayOfTensor1("child")
-  val parentWeights = matlab.getArrayOfTensor1("parent")
-  val arcWeights = matlab.getTensor2("arc")
-  val arcWeightsArray = matlab.getArrayOfTensor1("arc")
-  println("loading the string -> int domain for the parse tensor")
+  val childWeights = EmbeddingSerialization.deserialize(tensorFilename + ".child",numTake)
+  val parentWeights = EmbeddingSerialization.deserialize(tensorFilename + ".parent",numTake)
+  val arcWeights = EmbeddingSerialization.deserialize(tensorFilename + ".arc",numTake)
 
   val latentDim = childWeights(0).length
 
@@ -52,10 +48,15 @@ class KruskalParseTensor(tensorFilename: String, domainFilename: String) extends
   def getScoresForArc(childIndex: Int, parentIndex: Int, arcIndex: Int) : Double = {
     val child = childWeights(childIndex)
     val parent = parentWeights(parentIndex)
-    val arc = arcWeightsArray(arcIndex)
-    threeWayDotProd(child,parent,arc)
+    val arc = arcWeights(arcIndex)
+    TensorUtil.threeWayDotProd(child,parent,arc)
 
   }
+
+
+}
+
+object TensorUtil{
   def threeWayDotProd(a: DenseTensor1, b: DenseTensor1, c: DenseTensor1): Double = {
     var i = 0
     var sum = 0.0
@@ -69,9 +70,13 @@ class KruskalParseTensor(tensorFilename: String, domainFilename: String) extends
     }
     sum
   }
+  def  zipVectors(a: DenseTensor1,b: DenseTensor1): DenseTensor1 = {
+    val c = new DenseTensor1(a.length)
+    (0 until c.length).foreach(i => c(i) = a(i)*b(i))
+    c
+  }
 
 }
-
 
 trait ParseTensorOptions extends cc.factorie.util.CmdOptions  {
   val useTensor = new CmdOption("use-parse-tensor",false,"BOOLEAN","Whether to use word embeddings")

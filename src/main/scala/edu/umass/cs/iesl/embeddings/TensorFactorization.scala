@@ -24,59 +24,6 @@ import scala.Some
 import akka.actor.Status.Success
 
 
-trait FactorizationModel{
-  def updateCell(cell: (Int,Int,Int),target: Boolean,stepsize: Double): Double
-  def serialize(outFile: String): Unit
-}
-
-class AsymmetricMatrixFactorizationModel(latentDim: Int,val numRows: Int,val numCols: Int,rowRegularizer: Double, colRegularizer: Double,initializeRow: Int => Array[Double],initializeCol: Int => Array[Double],objective: UnivariateOptimizableObjective[Int],linkFunction: OptimizableObjectives.UnivariateLinkFunction) extends MatrixFactorizationModel(latentDim,rowRegularizer, colRegularizer,objective,linkFunction){
-  private val rowVectors = (0 until numRows).map(i => new DenseTensor1(initializeRow(i)))
-  private val colVectors = (0 until numCols).map(i => new DenseTensor1(initializeCol(i)))
-  def rowVector(i: Int): DenseTensor1  = rowVectors(i)
-  def colVector(j: Int): DenseTensor1 = colVectors(j)
-  def serialize(out: String) = {
-    EmbeddingSerialization.serialize(out + ".rows",rowVectors)
-    EmbeddingSerialization.serialize(out + ".cols",colVectors)
-  }
-}
-
-class SymmetricMatrixFactorizationModel(latentDim: Int,numRowsCols: Int,regularizer: Double,initialize: Int => Array[Double],objective: UnivariateOptimizableObjective[Int],linkFunction: OptimizableObjectives.UnivariateLinkFunction) extends MatrixFactorizationModel(latentDim,regularizer, regularizer,objective,linkFunction){
-  private val vectors = (0 until numRowsCols).map(i => new DenseTensor1(initialize(i)))
-  def rowVector(i: Int): DenseTensor1  = vectors(i)
-  def colVector(j: Int): DenseTensor1 = vectors(j)
-  val numRows = numRowsCols
-  val numCols = numRowsCols
-  def serialize(out: String) = {
-    EmbeddingSerialization.serialize(out,vectors)
-  }
-}
-
-abstract class MatrixFactorizationModel(val latentDim: Int,val rowRegularizer: Double, val colRegularizer: Double,val objective: UnivariateOptimizableObjective[Int],linkFunction: OptimizableObjectives.UnivariateLinkFunction) extends FactorizationModel{
-
-  def rowVector(i: Int): DenseTensor1
-  def colVector(j: Int): DenseTensor1
-  def numRows: Int
-  def numCols: Int
-
-  def lossAndGradient(i: Int,j:Int,cellIsTrue: Boolean) = objective.valueAndGradient(score(i,j),if(cellIsTrue) 1 else -1)
-  def predict(i: Int,j: Int) = linkFunction(score(i,j))
-  def score(i: Int, j: Int) = rowVector(i).dot(colVector(j))
-  def updateCell(cell: (Int,Int,Int),target: Boolean,stepsize: Double): Double = {
-    val rowIndex = cell._1
-    val colIndex = cell._2
-    val lg = lossAndGradient(rowIndex,colIndex,target)
-    val thisObjective = lg._1
-    val step = stepsize*lg._2
-    rowVector(rowIndex).*=((1-stepsize*rowRegularizer))
-    rowVector(rowIndex).+=(colVector(colIndex),step)
-
-    colVector(colIndex).*=((1-stepsize*colRegularizer))
-    colVector(colIndex).+=(rowVector(rowIndex),step)
-
-    thisObjective
-  }
-
-}
 
 
 class MatrixFactorizationOptions  extends cc.factorie.util.DefaultCmdOptions{
@@ -108,10 +55,10 @@ object MatrixFactorization{
     println("allocating model")
     assert(opts.outFile.wasInvoked)
 
-    val model = new SymmetricMatrixFactorizationModel(latentDimensionality,numRows,rowRegularizer,initVector,OptimizableObjectives.logBinary, OptimizableObjectives.logisticLinkFunction)
+    val model = new SymmetricMatrixFactorizationModel(latentDimensionality,numRows,rowRegularizer,initVector,OptimizableObjectives.logBinary, OptimizableObjectives.logisticLinkFunction)  with CellScoreBinary
     //////////////
 
-    val examplesFull: Iterator[(Int,Int,Int)] = (0 until opts.numPasses.value.toInt).toIterator.flatMap( i=> BinaryTriples.readAsciiTriplesFromFile(opts.trainFile.value))
+    val examplesFull: Iterator[(Int,Int,Int,Int)] = (0 until opts.numPasses.value.toInt).toIterator.flatMap( i=> BinaryTriples.readAsciiTriplesFromFileToQuads(opts.trainFile.value))
     val examples = if(!opts.numExamples.wasInvoked) examplesFull else examplesFull.take(opts.numExamples.value.toInt)
     //
     val start = System.currentTimeMillis()
@@ -122,7 +69,7 @@ object MatrixFactorization{
 
   }
 
-  def train(model: MatrixFactorizationModel,examples: Iterator[(Int,Int,Int)]){
+  def train(model: MatrixFactorizationModel,examples: Iterator[(Int,Int,Int,Int)]){
     var objective = 0.0
     val numNegatives = 3
 
@@ -152,14 +99,14 @@ object MatrixFactorization{
 
   }
 
-  def updateFromCells(model: MatrixFactorizationModel, cells: Seq[(Int,Int,Int)], stepsize: Double, numNegatives: Int) : Double = {
+  def updateFromCells(model: MatrixFactorizationModel, cells: Seq[(Int,Int,Int,Int)], stepsize: Double, numNegatives: Int) : Double = {
     var obj  = 0.0
     cells.foreach(cell => {
         obj += model.updateCell(cell,true,stepsize)
         (0 until numNegatives).foreach(_ => {
-          val negCell = (cell._1,random.nextInt(model.numCols),0)
+          val negCell = (cell._1,random.nextInt(model.numCols),0,0)
           obj += model.updateCell(negCell,false,stepsize)
-          val negCell2 = (random.nextInt(model.numRows),cell._2,0)
+          val negCell2 = (random.nextInt(model.numRows),cell._2,0,0)
           obj += model.updateCell(negCell2,false,stepsize)
         })
     })
@@ -179,21 +126,26 @@ object GetCounts{
     iter.foreach(triple => {
        val pair = (triple._1,triple._2)
        pairCounts(pair) += 1
-       tripleCounts(tripe) += 1
+       tripleCounts(triple) += 1
     })
+    println("read triples")
     val writer1 = new PrintWriter(new OutputStreamWriter(
       new GZIPOutputStream(new FileOutputStream(args(1) + ".triple")), "UTF-8"))
     tripleCounts.iterator.foreach(it => {
-       writer1.println(it._1.mkString(" ") + " " + it._2)
+       writer1.println("%d %d %d".format(it._1._1,it._1._2,it._1._3) + " " + it._2)
     })
     writer1.flush(); writer1.close()
 
+    println("wrote triple counts")
 
     val writer2 = new PrintWriter(new OutputStreamWriter(
       new GZIPOutputStream(new FileOutputStream(args(1) + ".pair")), "UTF-8"))
     pairCounts.iterator.foreach(it => {
-      writer.println(it._1.mkString(" ") + " " + it._2)
+      val str = "%d %d %d".format(it._1._1,it._1._2,it._2)
+      writer2.println(str+ " " + it._2)
     })
+    println("wrote pair counts")
+
     writer2.flush(); writer2.close()
   }
 }
@@ -202,10 +154,6 @@ object GetCounts{
  //todo: make stuff use counts
 
 object BinaryQuadruples{
-  def main(args: Array[String]): Unit = {
-    val iter = readAsciiTriplesFromFile(args(0))
-    serialize(iter,args(1))
-  }
 
   def readAsciiQuadruplesFromFile(f: String,gzip: Boolean = true): Iterator[(Int,Int,Int,Int)] = {
     val reader =
@@ -222,45 +170,57 @@ object BinaryQuadruples{
 }
 
 object BinaryTriples{
-  def main(args: Array[String]): Unit = {
-      val iter = readAsciiTriplesFromFile(args(0))
-      serialize(iter,args(1))
-  }
-  def serialize(iter: Iterator[(Int,Int,Int)], out: String) : Unit = {
-    val writer = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(out))))
-    iter.foreach(abc => {writer.writeInt(abc._1); writer.writeInt(abc._2); writer.writeInt(abc._3)} )
-    writer.flush()
-    writer.close()
-  }
-  def deserialize(in: String): Iterator[(Int,Int,Int)] = {
-    val reader = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(in))))
-
-    var nextTriple = null: (Int,Int,Int)
-    getNext()
-    def getNext(): Unit  = {
-      try {
-        nextTriple = (reader.readInt(),reader.readInt(),reader.readInt())
-      } catch{
-        case e: EOFException => nextTriple = null
-      }
-    }
-
-    new Iterator[(Int,Int,Int)]{
-      def hasNext = nextTriple != null
-      def next() = {
-        val d = nextTriple
-        getNext()
-        d
-      }
-    }
-
-  }
-  def readAsciiTriplesFromFile(f: String,gzip: Boolean = true): Iterator[(Int,Int,Int)] = {
+//  def main(args: Array[String]): Unit = {
+//      val iter = readAsciiTriplesFromFile(args(0))
+//      serialize(iter,args(1))
+//  }
+//  def serialize(iter: Iterator[(Int,Int,Int)], out: String) : Unit = {
+//    val writer = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(out))))
+//    iter.foreach(abc => {writer.writeInt(abc._1); writer.writeInt(abc._2); writer.writeInt(abc._3)} )
+//    writer.flush()
+//    writer.close()
+//  }
+//  def deserialize(in: String): Iterator[(Int,Int,Int)] = {
+//    val reader = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(in))))
+//
+//    var nextTriple = null: (Int,Int,Int)
+//    getNext()
+//    def getNext(): Unit  = {
+//      try {
+//        nextTriple = (reader.readInt(),reader.readInt(),reader.readInt())
+//      } catch{
+//        case e: EOFException => nextTriple = null
+//      }
+//    }
+//
+//    new Iterator[(Int,Int,Int)]{
+//      def hasNext = nextTriple != null
+//      def next() = {
+//        val d = nextTriple
+//        getNext()
+//        d
+//      }
+//    }
+//
+//  }
+  def readAsciiTriplesFromFileToQuads(f: String,gzip: Boolean = true): Iterator[(Int,Int,Int,Int)] = {
     val reader =
     if (!gzip)
       io.Source.fromFile(f)
     else
       io.Source.fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(f))))
+
+    reader.getLines.map(line => {
+      val fields = line.split(" ")
+      (fields(0).toInt , fields(1).toInt, fields(2).toInt,0)
+    })
+  }
+  def readAsciiTriplesFromFile(f: String,gzip: Boolean = true): Iterator[(Int,Int,Int)] = {
+    val reader =
+      if (!gzip)
+        io.Source.fromFile(f)
+      else
+        io.Source.fromInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(f))))
 
     reader.getLines.map(line => {
       val fields = line.split(" ")

@@ -34,7 +34,7 @@ object EmbeddingSerialization {
         arr(i)(j) = reader.readDouble()
         j +=1
       }
-      if (i % 100 == 0 && i > 0) println("loaded " + i + " vectors")
+      if (i % 5000 == 0 && i > 0) println("loaded " + i + " vectors")
       i +=1
     }
     arr
