@@ -116,7 +116,7 @@ object MatrixFactorization{
 
 }
 
-
+ //todo: could be using strings for keys
 object GetCounts{
   def main(args: Array[String]): Unit = {
     val tripleCounts = collection.mutable.HashMap[(Int,Int,Int),Int]().withDefaultValue(0)
