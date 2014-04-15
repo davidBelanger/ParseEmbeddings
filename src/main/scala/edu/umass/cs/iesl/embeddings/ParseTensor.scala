@@ -19,9 +19,9 @@ trait ParseTensor{
 class KruskalParseTensor(tensorFilename: String, domainFilename: String, numTake: Int = -1) extends ParseTensor{
   //load the tensor
   println("loading the parse tensor")
-  val childWeights = EmbeddingSerialization.deserialize(tensorFilename + ".child",numTake)
-  val parentWeights = EmbeddingSerialization.deserialize(tensorFilename + ".parent",numTake)
-  val arcWeights = EmbeddingSerialization.deserialize(tensorFilename + ".arc",numTake)
+  val childWeights = EmbeddingSerialization.deserialize(tensorFilename + ".rows",numTake)
+  val parentWeights = EmbeddingSerialization.deserialize(tensorFilename + ".cols",numTake)
+  val arcWeights = EmbeddingSerialization.deserialize(tensorFilename + ".arcs",numTake)
 
   val latentDim = childWeights(0).length
 
